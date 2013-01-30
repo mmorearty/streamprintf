@@ -1,35 +1,36 @@
 // Copyright (c) 2001 Mike Morearty
 // Original code and docs: http://www.morearty.com/code/streamprintf
-// Date: March 30, 2001
+// March 30, 2001
 //
 // Usage:
-//		// printf-style writing to an ostream
-//		ostream o;
-//		oprintf(o, "%s %d\n", "hello", 3);
+//      // printf-style writing to an ostream
+//      oprintf(std::cout, "%s %d\n", "hello", 3);
+//      ostream o = ...;
+//      oprintf(o, "%s %d\n", "hello", 3);
 //
-//		// printf-style writing to a C++ string
-//		string s = strprintf("%s %d\n", "hello", 3);
-//		wstring ws = wstrprintf(L"%s %d\n", L"hello", 3);
+//      // printf-style writing to a C++ string
+//      string s = strprintf("%s %d\n", "hello", 3);
+//      wstring ws = wstrprintf(L"%s %d\n", L"hello", 3); // Windows only
 //
-//		// printf-style passing of an argument to any function which has
-//		// a (const char*) argument, without having to first explicitly
-//		// write the string to a local variable
-//		void any_function(const char*);
-//		any_function( strprintf("%s %d\n", "hello", 3).c_str() );
+//      // printf-style passing of an argument to any function which has
+//      // a (const char*) argument, without having to first explicitly
+//      // write the string to a local variable
+//      void any_function(const char*);
+//      any_function( strprintf("%s %d\n", "hello", 3).c_str() );
 //
-//		// another example:
-//		MessageBox( hwnd,
-//					strprintf( "error %d", errorcode ).c_str(),
-//					NULL, MB_OK );
+//      // another example:
+//      MessageBox( hwnd,
+//                  strprintf( "error %d", errorcode ).c_str(),
+//                  NULL, MB_OK );
 
 //-----------------------------------------------------------------------------
 // If STREAMPRINTF_STRICT_SIGN is defined, then the sign of the parameter
 // must match the sign of the formatting argument.  For example, if this is
 // defined, then the following lines would cause runtime assertions:
-//		int i = 0;
-//		unsigned u = 0;
-//		oprintf(cout, "%d", u);
-//		oprintf(cout, "%u", i);
+//      int i = 0;
+//      unsigned u = 0;
+//      oprintf(cout, "%d", u);
+//      oprintf(cout, "%u", i);
 
 // #define STREAMPRINTF_STRICT_SIGN
 
@@ -38,10 +39,10 @@
 // If STREAMPRINTF_STRICT_INTSIZE is defined, then 'int' and 'long' are treated
 // as incompatible types.  For example, if this is defined, then the following
 // lines would cause runtime assertions:
-//		int i = 0;
-//		int l = 0;
-//		oprintf(cout, "%ld", i);
-//		oprintf(cout, "%d", l);
+//      int i = 0;
+//      int l = 0;
+//      oprintf(cout, "%ld", i);
+//      oprintf(cout, "%d", l);
 
 // #define STREAMPRINTF_STRICT_INTSIZE
 
@@ -49,16 +50,25 @@
 #include <assert.h>
 #include <stdarg.h>
 #include <ctype.h>
-#include <malloc.h>
+#ifdef _MSC_VER
+	#include <malloc.h>
+#endif
+
+#ifndef _MSC_VER
+	#include <sys/types.h>
+#endif
 
 #include <iostream>
 #include <sstream>
+#include <string>
 
 #ifndef NDEBUG
 	#if _MSC_VER >= 1400
 		#define assertmsg(exp, msg) (void)( (exp) || (_wassert(_CRT_WIDE(msg), _CRT_WIDE(__FILE__), __LINE__), 0) )
-	#else
+	#elif defined(_MSC_VER)
 		#define assertmsg(exp, msg) (void)( (exp) || (_assert(msg, __FILE__, __LINE__), 0) )
+	#else
+		#define assertmsg(exp, msg) (void)( (exp) || (__assert(msg, __FILE__, __LINE__), 0) )
 	#endif
 	#define PRINTF_TYPE(n) n
 #else
@@ -69,6 +79,14 @@
 template <class CharT>
 class Printf
 {
+	#ifdef _MSC_VER
+	typedef __int64 INT64;
+	typedef unsigned __int64 UINT64;
+	#else
+	typedef __int64_t INT64;
+	typedef __uint64_t UINT64;
+	#endif
+
 public:
 	Printf(std::basic_ostream<CharT>& ostm, const CharT* fmt) : _ostm(ostm), _fmt(fmt), _pos(0)
 		{ OutputStaticText(); }
@@ -79,12 +97,12 @@ public:
 	Printf& operator<<(short n)                { Do(PRINTF_TYPE(Short| Int), n); return *this; }
 	Printf& operator<<(int n)                  { Do(PRINTF_TYPE(None | Int), n); return *this; }
 	Printf& operator<<(long n)                 { Do(PRINTF_TYPE(Long | Int), n); return *this; }
-	Printf& operator<<(__int64 n)              { Do(PRINTF_TYPE(Int64| Int), n); return *this; }
+	Printf& operator<<(INT64 n)                { Do(PRINTF_TYPE(Int64| Int), n); return *this; }
 
 	Printf& operator<<(unsigned short u)       { Do(PRINTF_TYPE(Short| Unsigned), u); return *this; }
 	Printf& operator<<(unsigned int u)         { Do(PRINTF_TYPE(None | Unsigned), u); return *this; }
 	Printf& operator<<(unsigned long u)        { Do(PRINTF_TYPE(Long | Unsigned), u); return *this; }
-	Printf& operator<<(unsigned __int64 u)     { Do(PRINTF_TYPE(Int64| Unsigned), u); return *this; }
+	Printf& operator<<(UINT64 u)               { Do(PRINTF_TYPE(Int64| Unsigned), u); return *this; }
 
 	Printf& operator<<(float f)                { Do(PRINTF_TYPE(None | Float), f); return *this; }
 	Printf& operator<<(double f)               { Do(PRINTF_TYPE(None | Float), f); return *this; }
@@ -135,6 +153,7 @@ inline void Printf<char>::my_vsprintf(char* output, size_t width, const char* fo
 	#endif
 }
 
+#ifdef _MSC_VER
 template <>
 inline void Printf<wchar_t>::my_vsprintf(wchar_t* output, size_t width, const wchar_t* format, va_list vl)
 {
@@ -144,6 +163,7 @@ inline void Printf<wchar_t>::my_vsprintf(wchar_t* output, size_t width, const wc
 		vswprintf(output, format, vl);
 	#endif
 }
+#endif
 
 //-----------------------------------------------------------------------------
 template <class CharT>
@@ -293,6 +313,7 @@ void Printf<CharT>::Do(int sizeAndType, ...)
 		case Int64:
 			assertmsg(sizeChar == 'I', "printf: Type mismatch");
 			break;
+		case sizeMask: ; // to prevent gcc warning
 		}
 	}
 
@@ -548,8 +569,11 @@ public:
 		*(Base*)this = o.str();
 	}
 
-	operator const CharT* () { return c_str(); }
+	operator const CharT* () const { return std::basic_string<CharT>::c_str(); }
 };
 
 typedef strprintfT<char> strprintf;
+
+#ifdef _MSC_VER
 typedef strprintfT<wchar_t> wstrprintf;
+#endif
